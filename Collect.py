@@ -19,18 +19,37 @@ twitter_API = twitter.Api(
     access_token_key = pws.ACC_TOKEN,
     access_token_secret = pws.ACC_SECRET
 )
-print("\n" + str(twitter_API.VerifyCredentials()) + "\n")
+# print("\n" + str(twitter_API.VerifyCredentials().id) + "\n")
 
-print(twitter_API.GetListMembers(
-    slug = "politik_bundestag_mdb_all",
-    owner_id = twitter_API.GetUser(screen_name = "christoph_z").id
-))
+# print(twitter_API.GetUser(screen_name = "christoph_z").id)
+
+memberList = twitter_API.GetListMembersPaged(
+    slug = "politik-bundestag-mdb-all",
+    owner_id = twitter_API.GetUser(screen_name = "christoph_z").id,
+    count = 498
+)[2]
+# print("Length of member list: " + str(len(memberList)))
+# print(dir(memberList[2]))
+
+timeline = twitter_API.GetUserTimeline(
+    user_id = memberList[17].id
+)
+
+for tweet in timeline:
+    print(tweet)
+    print("\n\n")
+
+# for member in memberList:
+#     print(member.screen_name + "\n")
+
+
+
 
 
 
 db_cursor.execute("SELECT * FROM pic_info;")
 result = db_cursor.fetchall()
-print(db_cursor.rowcount)
+# print(db_cursor.rowcount)
 
 for row in result:
     print(row[0] + "\n" + row[3])
