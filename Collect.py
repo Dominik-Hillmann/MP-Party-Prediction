@@ -3,6 +3,9 @@ import Pass as pws
 import twitter
 import json
 from datetime import datetime
+import unicodedata
+from unidecode import unidecode
+import time
 
 def get_party_label(user, api):
     s = user.description.lower()
@@ -41,6 +44,19 @@ def get_party_label(user, api):
         return re.upper()
 
 
+def demojify(in_str):
+    re_str = ""
+
+    for character in in_str:
+        try:
+            character.encode("ascii")
+            re_str += character
+        except UnicodeEncodeError:
+            re_str += " "
+
+    return re_str
+
+
 # Connect to database.
 db = connector.connect(
     host = "localhost",
@@ -70,6 +86,7 @@ memberList = twitter_API.GetListMembersPaged(
     owner_id = twitter_API.GetUser(screen_name = "christoph_z").id,
     count = 498 # get all members in this list
 )[2]
+time.sleep(2)
 # print(json.dumps(json.loads(str(memberList[69])), indent = 3, sort_keys = False))
 
 for user in memberList:
@@ -101,10 +118,64 @@ for user in memberList:
                 )
             )
             db.commit()
-            
+
         except:
             print("Fehler: versuche nächstes Listenmitglied...")
             continue
+
+unaccessable_timelines = []
+for user in memberList:
+    try:
+        timeline = twitter_API.GetUserTimeline(
+            user_id = user.id,
+            trim_user = True,
+            include_rts = False
+        )
+    except:
+        unaccessable_timelines.append(user.screen_name)
+        continue # if for some reason not allowed to read timeline, go to next user
+
+    time.sleep(10)
+    for tweet in timeline:
+        creation_date = datetime.strptime(tweet.created_at, "%a %b %d %H:%M:%S %z %Y")
+        tweet_text = demojify(tweet.full_text).replace("'", "").replace("\"", "").replace(",", "")
+        # print(json.dumps(json.loads(str(tweet)), indent = 3, sort_keys = False))
+
+        # Insert the tweet into the database.
+        print("Insert: " + tweet.full_text + "\n")
+        db_cursor.execute(
+            "INSERT INTO tweet (twitter_tweet_id, twitter_user_id, full_text, favorites_count, retweet_count, creation_date, creation_time," +
+            "lang, device, uses_media) VALUES ({0}, {1}, '{2}', {3}, {4}, '{5}', '{6}', '{7}', '{8}', b'{9}');".format(
+                tweet.id,
+                user.id,
+                tweet_text[:400] if len(tweet_text) > 400 else tweet_text,
+                tweet.favorite_count, 
+                tweet.retweet_count,
+                creation_date.strftime("%Y-%m-%d"),
+                creation_date.strftime("%H:%M:%S"),
+                tweet.lang,
+                tweet.source,
+                str(1) if hasattr(user, "media") else str(0)
+            )
+        )
+        # Insert the used hashtags into the database.
+        for tag in tweet.hashtags:
+            db_cursor.execute(
+                "INSERT INTO tweet_hashtag (twitter_tweet_id, hashtag_str) VALUES ({0}, '{1}');".format(
+                    str(tweet.id),
+                    tag.text
+                )
+            )
+        # Insert all the mentioned users into the database.
+        for mentioned_user in tweet.user_mentions:
+            db_cursor.execute(
+                "INSERT INTO tweet_mentioned_user (twitter_tweet_id, mentioned_user_id) VALUES ({0}, {1});".format(
+                    tweet.id,
+                    mentioned_user.id
+                )
+            )
+
+        db.commit()
     
     
 
@@ -128,11 +199,6 @@ for user in memberList:
 # for member in memberList:
 #     print(member.screen_name + "\n")
 
-
-
-
-
-
 # db_cursor.execute("SELECT * FROM pic_info;")
 # result = db_cursor.fetchall()
 # # print(db_cursor.rowcount)
@@ -143,33 +209,7 @@ for user in memberList:
 
 # print(db_cursor)
 
-# Idee: Metadaten über User in R analysieren
-
-# User-Schema in der Datenbank: was soll es enthalten:
-    # creation_day, creation_month, creation_year, creation_hour, creation_min
-    # favorites_count, followers_count, friends_count, listed_count
-    # KEY: id
-    # lang, location -> auf Koords mappen? Konzentrieren sich Abgeordnete geographisch?
-    # link_color, sidebar_border_color, sidebar_fill_color, text_color
-    # screen_name
-
-# Tweet-Schema:
-    # KEY: tweet_id
-    # user_id
-    # full_text
-    # creation_day, creation_month, creation_year, creation_hour, creation_min
-    # lang
-    # bool: uses_media
-    # retweet_count, favorite_count
-    # hashtags (zusammen als String, getrennt durch Kommas)
-    # device (== source)
-
-# n-n-Beziehungen: eigene Relationen
-    # Tweet-Hashtag-Schema:
-        # tweet_id
-        # hashtag_str
-    # Tweet_Mentioned_User-Schema:
-        # tweet_id
-        # user_id
-
+print("Could not access following timelines:")
+for name in unaccessable_timelines:
+    print(name)
 db.close()
