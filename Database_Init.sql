@@ -57,16 +57,3 @@ CREATE TABLE IF NOT EXISTS tweet_mentioned_user(
     twitter_tweet_id        BIGINT NOT NULL,
     mentioned_user_id       BIGINT NOT NULL -- id of user who issued this tweets can be seen by following this tweet_id
 )
-
--- How large is my database in MB?
-SELECT table_schema AS "Database", Round(Sum(data_length + index_length) / 1024 / 1024, 1) AS "Size in MB" FROM information_schema.tables GROUP BY table_schema;
--- Export the user table to a .csv file to be analyzed in R.
-USE mp_party_prediction;
-
-SELECT *
-FROM user
-WHERE user.party <> 'N' -- No users where party affiliation is not obvious.
-INTO OUTFILE '/var/lib/mysql-files/Party_Affiliation.csv'
-FIELDS TERMINATED BY ','
-ENCLOSED BY '"'
-LINES TERMINATED BY '\n';
