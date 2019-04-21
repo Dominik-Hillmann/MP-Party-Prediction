@@ -87,7 +87,6 @@ memberList = twitter_API.GetListMembersPaged(
     count = 498 # get all members in this list
 )[2]
 time.sleep(2)
-# print(json.dumps(json.loads(str(memberList[69])), indent = 3, sort_keys = False))
 
 for user in memberList:
     db_cursor.execute("SELECT * from user WHERE user.twitter_user_id = '" + str(user.id) + "';")
@@ -124,81 +123,118 @@ for user in memberList:
             continue
 
 unaccessable_timelines = []
-for user in memberList:
-    try:
-        timeline = twitter_API.GetUserTimeline(
-            user_id = user.id,
-            trim_user = True,
-            include_rts = False
-        )
-    except:
-        unaccessable_timelines.append(user.screen_name)
-        continue # if for some reason not allowed to read timeline, go to next user
+user_num = 1
 
-    time.sleep(10)
+for user in memberList[:10]: ##############################################################################################
+    timeline = []
+    timeline_piece = []
+
+    print("\nCollecting tweets for list member number " + str(user_num) + ", " + user.screen_name + ".")
+    user_num += 1
+
+    try:
+
+        first_iteration = True
+        while True:
+            if first_iteration:
+                # If max_id is specified, it will only return Tweets younger than the one with ID max_id.
+                # => I cannot specify max_id if I do not have any other tweets from that timeline.
+                timeline_piece = twitter_API.GetUserTimeline(
+                    user_id = user.id,
+                    trim_user = True,
+                    include_rts = True,
+                    exclude_replies = False,
+                    count = 200
+                )                
+            else:
+                timeline_piece = twitter_API.GetUserTimeline(
+                    user_id = user.id,
+                    trim_user = True,
+                    include_rts = True,
+                    exclude_replies = False,
+                    count = 200,                        
+                    max_id = timeline[len(timeline) - 1].id
+                )[1:] # ID of oldest tweet in current timeline - 1 because other wise same tweet would be sent again.
+            
+            for tweet in timeline_piece:
+                timeline.append(tweet)
+            print(("First" if first_iteration else "Further") + " tweets stack of size " + str(len(timeline_piece)) + " for " + user.screen_name + "...")
+            print("Timeline length: " + str(len(timeline)))
+
+            if len(timeline_piece) < 199:
+                break # No next timeline piece because if there was, this one would have had exactly 200.
+            else:
+                first_iteration = False
+                time.sleep(3) # Wait 5 seconds before next API call because Twitter limits number of calls.
+
+    except:
+        print("Fehler!")
+        # Most times, error code will be returned because user made their tweets unavailable to the API.
+        # => Next user, and keep track of unavailable users.
+        unaccessable_timelines.append(user.screen_name)
+        continue
+
+    print("Zahl abgefragter Tweets vs Zahl angezeigter Tweets: " + str(len(timeline)) + " vs " + str(user.statuses_count))
+
     for tweet in timeline:
         creation_date = datetime.strptime(tweet.created_at, "%a %b %d %H:%M:%S %z %Y")
         tweet_text = demojify(tweet.full_text).replace("'", "").replace("\"", "").replace(",", "")
-        # print(json.dumps(json.loads(str(tweet)), indent = 3, sort_keys = False))
 
-        # Insert the tweet into the database.
-        print("Insert: " + tweet.full_text + "\n")
-        db_cursor.execute(
-            "INSERT INTO tweet (twitter_tweet_id, twitter_user_id, full_text, favorites_count, retweet_count, creation_date, creation_time," +
-            "lang, device, uses_media) VALUES ({0}, {1}, '{2}', {3}, {4}, '{5}', '{6}', '{7}', '{8}', b'{9}');".format(
-                tweet.id,
-                user.id,
-                tweet_text[:400] if len(tweet_text) > 400 else tweet_text,
-                tweet.favorite_count, 
-                tweet.retweet_count,
-                creation_date.strftime("%Y-%m-%d"),
-                creation_date.strftime("%H:%M:%S"),
-                tweet.lang,
-                tweet.source,
-                str(1) if hasattr(user, "media") else str(0)
-            )
-        )
-        # Insert the used hashtags into the database.
-        for tag in tweet.hashtags:
+        # If this tweet is already in the database, skip its insertion.
+        db_cursor.execute("SELECT twitter_tweet_id FROM tweet WHERE twitter_tweet_id = " + str(tweet.id) + ";")
+
+        if len(db_cursor.fetchall()) == 0:
             db_cursor.execute(
-                "INSERT INTO tweet_hashtag (twitter_tweet_id, hashtag_str) VALUES ({0}, '{1}');".format(
-                    str(tweet.id),
-                    tag.text
-                )
-            )
-        # Insert all the mentioned users into the database.
-        for mentioned_user in tweet.user_mentions:
-            db_cursor.execute(
-                "INSERT INTO tweet_mentioned_user (twitter_tweet_id, mentioned_user_id) VALUES ({0}, {1});".format(
+                "INSERT INTO tweet (twitter_tweet_id, twitter_user_id, full_text, favorites_count, retweet_count, creation_date, creation_time," +
+                "lang, device, uses_media) VALUES ({0}, {1}, '{2}', {3}, {4}, '{5}', '{6}', '{7}', '{8}', b'{9}');".format(
                     tweet.id,
-                    mentioned_user.id
+                    user.id,
+                    tweet_text[:400] if len(tweet_text) > 400 else tweet_text,
+                    tweet.favorite_count, 
+                    tweet.retweet_count,
+                    creation_date.strftime("%Y-%m-%d"),
+                    creation_date.strftime("%H:%M:%S"),
+                    tweet.lang,
+                    tweet.source,
+                    str(1) if hasattr(tweet, "media") else str(0)
                 )
             )
 
-        db.commit()
+            # Insert the used hashtags into the database.
+            for tag in tweet.hashtags:
+                db_cursor.execute(
+                    "SELECT * FROM tweet_hashtag WHERE " +
+                    "(twitter_tweet_id = " + str(tweet.id) + ") AND " +
+                    "(hashtag_str = '" + tag.text + "');"
+                )
+                if len(db_cursor.fetchall()) == 0:
+                    db_cursor.execute(
+                        "INSERT INTO tweet_hashtag (twitter_tweet_id, hashtag_str) VALUES ({0}, '{1}');".format(
+                            str(tweet.id),
+                            tag.text
+                        )
+                    )
+            
+            # Insert all the mentioned users into the database.
+            for mentioned_user in tweet.user_mentions:
+                db_cursor.execute(
+                    "SELECT * FROM tweet_mentioned_user WHERE " +
+                    "(twitter_tweet_id = " + str(tweet.id) + ") AND " +
+                    "(mentioned_user_id = " + str(mentioned_user.id) + ");"
+                )
+                if len(db_cursor.fetchall()) == 0:
+                    db_cursor.execute(
+                        "INSERT INTO tweet_mentioned_user (twitter_tweet_id, mentioned_user_id) VALUES ({0}, {1});".format(
+                            tweet.id,
+                            mentioned_user.id
+                        )
+                    )
+
+            db.commit()
+        
+        else:
+            print("Tweet bereits in Datenbank.\n")
     
-    
-
-
-# timeline = twitter_API.GetUserTimeline(
-#     user_id = memberList[69].id,
-#     trim_user = True, # only return tweet, not associated user data
-#     include_rts = False # no retweets
-# )
-
-# print(
-#     json.dumps(json.loads(str(memberList[69])), indent = 3, sort_keys = False)
-# )
-
-# for tweet in timeline:
-#     print(
-#         json.dumps(json.loads(str(tweet)), indent = 3, sort_keys = False)
-#     )
-#     print("\n")
-
-# for member in memberList:
-#     print(member.screen_name + "\n")
-
 # db_cursor.execute("SELECT * FROM pic_info;")
 # result = db_cursor.fetchall()
 # # print(db_cursor.rowcount)
