@@ -7,6 +7,8 @@ import unicodedata
 from unidecode import unidecode
 import time
 
+# If there are any indicators to which party this person belongs, then assign the party.
+# Else, display the description and display the last 4 tweets and let the user choose.
 def get_party_label(user, api):
     s = user.description.lower()
 
@@ -23,10 +25,12 @@ def get_party_label(user, api):
     elif ("afd" in s):
         return "A"
     else:
+        # Get last 3 tweets from timeline.
         timeline = api.GetUserTimeline(
             user_id = user.id,
             trim_user = True,
-            include_rts = False
+            include_rts = False,
+            count = 3
         )
         
         print("\n\nKeine automatische Zuordnung möglich für " + user.screen_name)
@@ -43,7 +47,7 @@ def get_party_label(user, api):
         re = input()
         return re.upper()
 
-
+# Returns string stripped of all emojis.
 def demojify(in_str):
     re_str = ""
 
@@ -90,7 +94,8 @@ time.sleep(2)
 
 for user in memberList:
     db_cursor.execute("SELECT * from user WHERE user.twitter_user_id = '" + str(user.id) + "';")
-
+    
+    # Only if this person is not contained in database, add the person.
     if len(db_cursor.fetchall()) == 0:
         creation_date = datetime.strptime(user.created_at, "%a %b %d %H:%M:%S %z %Y")
 
@@ -119,13 +124,14 @@ for user in memberList:
             db.commit()
 
         except:
+            # Just continue if user cannot be found.
             print("Fehler: versuche nächstes Listenmitglied...")
             continue
 
 unaccessable_timelines = []
 user_num = 1
 
-for user in memberList[:10]: ##############################################################################################
+for user in memberList:
     timeline = []
     timeline_piece = []
 
@@ -133,7 +139,6 @@ for user in memberList[:10]: ###################################################
     user_num += 1
 
     try:
-
         first_iteration = True
         while True:
             if first_iteration:
@@ -166,7 +171,6 @@ for user in memberList[:10]: ###################################################
             else:
                 first_iteration = False
                 time.sleep(3) # Wait 5 seconds before next API call because Twitter limits number of calls.
-
     except:
         print("Fehler!")
         # Most times, error code will be returned because user made their tweets unavailable to the API.
@@ -235,6 +239,11 @@ for user in memberList[:10]: ###################################################
         else:
             print("Tweet bereits in Datenbank.\n")
     
+print("Could not access following timelines:")
+for name in unaccessable_timelines:
+    print(name)
+db.close()
+
 # db_cursor.execute("SELECT * FROM pic_info;")
 # result = db_cursor.fetchall()
 # # print(db_cursor.rowcount)
@@ -244,8 +253,3 @@ for user in memberList[:10]: ###################################################
 #     print("\n")
 
 # print(db_cursor)
-
-print("Could not access following timelines:")
-for name in unaccessable_timelines:
-    print(name)
-db.close()

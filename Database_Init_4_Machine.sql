@@ -1,0 +1,6 @@
+CREATE DATABASE IF NOT EXISTS mp_party_prediction;
+USE mp_party_prediction;
+CREATE TABLE IF NOT EXISTS user(twitter_user_id BIGINT NOT NULL,screen_name VARCHAR(250) NOT NULL,favorites_count INT NOT NULL,followers_count INT NOT NULL,friends_count INT NOT NULL,listed_count INT NOT NULL,statuses_count INT NOT NULL,creation_date DATE NOT NULL,creation_time TIME NOT NULL,loc VARCHAR(250) NOT NULL,link_color VARCHAR(250) NOT NULL,sidebar_border_color VARCHAR(250) NOT NULL,sidebar_fill_color VARCHAR(250) NOT NULL,text_color VARCHAR(250) NOT NULL,party VARCHAR(20) NOT NULL,PRIMARY KEY (twitter_user_id))
+CREATE TABLE IF NOT EXISTS tweet(twitter_tweet_id BIGINT NOT NULL,twitter_user_id BIGINT NOT NULL,full_text VARCHAR(400) NOT NULL,favorites_count INT NOT NULL,retweet_count INT NOT NULL,creation_date DATE NOT NULL,creation_time TIME NOT NULL,lang VARCHAR(5) NOT NULL,device VARCHAR(250) NOT NULL,uses_media TINYINT(1) NOT NULL,PRIMARY KEY (twitter_tweet_id))
+CREATE TABLE IF NOT EXISTS tweet_hashtag(twitter_tweet_id BIGINT NOT NULL,hashtag_str VARCHAR(100) NOT NULL)
+CREATE TABLE IF NOT EXISTS tweet_mentioned_user(twitter_tweet_id BIGINT NOT NULL,mentioned_user_id BIGINT NOT NULL)
