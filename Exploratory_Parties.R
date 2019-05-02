@@ -17,12 +17,21 @@ spd_red <- "#FF0000"
 #
 sum(party == "F")
 party <- as.character(X[, "party"])
-party[party == "F"] <- "FDP"
-party[party == "S"] <- "SPD"
-party[party == "C"] <- "CDU/CSU"
-party[party == "A"] <- "AfD"
-party[party == "G"] <- "B90/Grüne"
-party[party == "L"] <- "Die Linke"
+party.colors <- party
+
+party[party == "F"] <- fdp <- "FDP"
+party[party == "S"] <- spd <- "SPD"
+party[party == "C"] <- union <- "CDU/CSU"
+party[party == "A"] <- afd <- "AfD"
+party[party == "G"] <- green <- "B90/Grüne"
+party[party == "L"] <- left <- "Die Linke"
+
+party.colors[party.colors == "F"] <- fdp_yellow
+party.colors[party.colors == "S"] <- spd_red
+party.colors[party.colors == "C"] <- cdu_orange
+party.colors[party.colors == "A"] <- afd_blue
+party.colors[party.colors == "G"] <- greens_green
+party.colors[party.colors == "L"] <- left_purple
 
 boxplot(
   statuses_count ~ party, 
@@ -89,3 +98,62 @@ heatmap(
   cor(cbind(favorites_count, followers_count, friends_count, listed_count, statuses_count, detailed_creation_year)),
   keep.dendro = TRUE
 )
+
+pca.X <- cbind(favorites_count, followers_count, friends_count, listed_count, statuses_count, detailed_creation_year)
+for (colname in colnames(pca.X)) {
+  col <- pca.X[, colname]
+  pca.X[, colname] <- (col - mean(col)) / sd(col)
+}
+cov.X <- cov(pca.X)
+E <- eigen(cov.X)$vectors
+Lambda <- eigen(cov.X)$values
+
+PCs <- data.frame(E)
+rownames(PCs) <- colnames(cov.X)
+colnames(PCs) <- c("PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
+
+prop.Lambda <- Lambda / sum(Lambda)
+cumul.Lambda <- rep(NA, length(Lambda))
+for (i in 1:length(Lambda)) {
+  cumul.Lambda[i] <- sum(prop.Lambda[1:i])
+}
+cumul.Lambda
+PCs
+
+plot(1:length(Lambda), Lambda, type = "lines")
+# PC1 gets larger, the
+  # lower the number of listings
+  # the lower the number of statuses
+# PC1 is an activity dimension?
+pc.1.coef <- as.numeric(PCs[, "PC1"])
+pc.2.coef <- as.numeric(PCs[, "PC2"])
+pc.3.coef <- as.numeric(PCs[, "PC3"])
+# PC2 gets larger, the
+  # higher the number of favorites the user has given
+  # lower the number of followers
+
+# PC3 gets larger
+  # the younger the account is
+
+
+pc.1 <- pc.2 <- pc.3 <- rep(NA, nrow(pca.X))
+for (i in 1:nrow(pca.X)) {
+  pc.1[i] <- (t(pc.1.coef) %*% as.vector(pca.X[i, ])) %>% as.numeric
+  pc.2[i] <- (t(pc.2.coef) %*% as.vector(pca.X[i, ])) %>% as.numeric
+  pc.3[i] <- (t(pc.3.coef) %*% as.vector(pca.X[i, ])) %>% as.numeric
+}
+pca.X <- cbind(pca.X, pc.1, pc.2, pc.3, party)
+
+plot(pc.1, pc.2, col = party.colors, pch = 20)
+
+plot(pc.1, pc.2, col = party.colors, pch = 20, xlim = c(-2, 2), ylim = c(-2, 2))
+
+plot(pc.2, pc.3, col = party.colors, pch = 20)
+arrows(0, 0, 1, 1)
+
+boxplot(pc.1 ~ party)
+boxplot(pc.2 ~ party)
+boxplot(pc.3 ~ party)
+
+
+
