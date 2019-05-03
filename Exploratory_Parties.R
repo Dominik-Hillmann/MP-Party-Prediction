@@ -103,7 +103,7 @@ pca.X <- cbind(favorites_count, followers_count, friends_count, listed_count, st
 for (colname in colnames(pca.X)) {
   col <- pca.X[, colname]
   pca.X[, colname] <- (col - mean(col)) / sd(col)
-}
+} 
 cov.X <- cov(pca.X)
 E <- eigen(cov.X)$vectors
 Lambda <- eigen(cov.X)$values
@@ -154,6 +154,3 @@ arrows(0, 0, 1, 1)
 boxplot(pc.1 ~ party)
 boxplot(pc.2 ~ party)
 boxplot(pc.3 ~ party)
-
-
-
